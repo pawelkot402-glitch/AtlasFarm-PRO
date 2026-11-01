@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AtlasFarm PRO (nieoficjalny)
 // @namespace    atlasfarm.pro.license.v1
-// @version      1.1.0
+// @version      1.2.0
 // @description  Nieoficjalny menedżer EXP, tras i handlu z licencją; wymaga zgodności z regulaminem gry.
 // @match        https://*.margonem.pl/*
 // @match        https://*.margonem.com/*
@@ -9,6 +9,8 @@
 // @noframes
 // @grant        none
 // @license      Proprietary - warunki określa sprzedawca
+// @updateURL    https://raw.githubusercontent.com/pawelkot402-glitch/AtlasFarm-PRO/main/AtlasFarm_PRO.user.js
+// @downloadURL  https://raw.githubusercontent.com/pawelkot402-glitch/AtlasFarm-PRO/main/AtlasFarm_PRO.user.js
 // ==/UserScript==
 /*
   v48: Jeden sterownik, bez konkurujących pętli podróży i walki.
@@ -21,8 +23,8 @@
 */
 
 /*
-  Wersja sprzedażowa AtlasFarm PRO 1.1.0, silnik Multi-Farm 61.9.0.
-  Poprzednia wersja AtlasFarm PRO 1.0.0 aktualizuje się bez utraty klucza.
+  Wersja sprzedażowa AtlasFarm PRO 1.2.0, silnik Multi-Farm 61.9.1.
+  Wersje AtlasFarm PRO 1.0.0 i 1.1.0 aktualizują się bez utraty klucza.
   Oryginalny Multi-Farm ma osobny identyfikator; wyłącz go, aby uniknąć konfliktów.
   v61.1: Tunia Frupotius, zweryfikowany identyfikator NPC na mapie 353,
   nowe selektory odpowiedzi dialogowych i limit prób rozmowy.
@@ -48,6 +50,7 @@
       try { document.getElementById(id)?.remove(); } catch {}
     }
   }
+  // v61.9.1: zakup zwojów teleportacji jednorazowo jako pakiet pięciu sztuk.
   // v61.9.0: automatyczne zamknięcie sklepu i potwierdzenie zamknięcia przed powrotem na EXP.
   // v61.7.0: naprawiono osierocone koszyki po restarcie, akceptację sprzedaży,
   // odzyskiwanie transakcji, przejście do zakupów i kontrolę typu przedmiotów.
@@ -56,9 +59,9 @@
   // v61.4.0: Tunia: naprawa wyboru przedmiotów z plecaka, retry, skip, koszyki.
   // v61.3.0: Tunia: wspólny sterownik sklepu, akceptacja transakcji,
   // weryfikacja ekwipunku, dialog oraz przeglądanie trzech toreb.
-  const VERSION = '61.9.0';
+  const VERSION = '61.9.1';
   const PRODUCT_NAME = 'AtlasFarm PRO';
-  const PRODUCT_VERSION = '1.1.0';
+  const PRODUCT_VERSION = '1.2.0';
   // AtlasFarm PRO: weryfikacja podpisanego klucza bez serwera.
   // W skrypcie klienta jest TYLKO KLUCZ PUBLICZNY. Klucz prywatny zostaje u sprzedawcy.
   const LICENSE_STORAGE_KEY='AFPRO_LICENSE_V1';
@@ -1584,7 +1587,7 @@
     const b=shopBasketState();
     if(b.buy===null)return pauseTrade('Utracono odczyt koszyka zakupowego.');
     if(p.added>0&&b.buy===0)return pauseTrade('Koszyk został opróżniony bez potwierdzenia.');
-    if(p.added>=p.goalClicks || p.added>=MAX_BUY_BATCH_ITEMS){p.phase='commit';return;}
+    if(p.added>=p.goalClicks || p.added>=MAX_BUY_BATCH_ITEMS || (p.kind==='scrolls'&&p.added>=1)){p.phase='commit';return;}
     const el=shopItemElement({id:p.itemId,tpl:p.itemTpl});
     if(!el){
       if(p.added){p.phase='commit';return;}
@@ -1603,11 +1606,11 @@
     if(b.buy===null || b.sell===null)return pauseTrade('Nie mogę odczytać obu koszyków sklepu.');
     if(b.buy!==0||b.sell!==0)return pauseTrade('Wykryto nierozliczony koszyk przed zakupem (sprzedaż: '+b.sell+', kupno: '+b.buy+'). Nie kupuję w ciemno.');
     // Stan magazynowy sprzedawcy NIE oznacza wielkości pakietu.
-    const pack=kind==='potions'?SUPPLY.potionPack:1;
-    // Zawsze dokładnie 5 kliknięć na zwoje, niezależnie od tego, ile
-    // teleportów zużyliśmy podczas drogi do Tunii (a nie: cel minus aktualny zapas).
+    // Tunia sprzedaje teleporty w pakietach po 5: JEDNO kliknięcie = 5 zwojów.
+    // Nie wolno liczyć jednego kliknięcia jako jednej sztuki!
+    const pack=kind==='potions'?SUPPLY.potionPack:SUPPLY.scrollPack;
     const missing=kind==='potions'?Math.max(0,state.supplyPotionGoal-before):SUPPLY.scrollPack;
-    const clicks=Math.max(1,Math.ceil(missing/pack));
+    const clicks=kind==='scrolls'?1:Math.max(1,Math.ceil(missing/pack));
     state.shopPending={kind,phase:'fill',itemId:String(item.id),itemTpl:String(item.tpl??item.templateId??itemTemplateId(el)??''),
       name:String(item.name||item.nick||item.id),before,pack,goalClicks:Math.min(clicks,MAX_BUY_BATCH_ITEMS),
       added:0,prevCount:0,prevSignature:null,lastAt:Date.now()};
